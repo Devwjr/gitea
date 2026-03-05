@@ -1154,6 +1154,7 @@ func registerWebRoutes(m *web.Router) {
 		m.Group("/actions/general", func() {
 			m.Get("", repo_setting.ActionsGeneralSettings)
 			m.Post("/actions_unit", repo_setting.ActionsUnitPost)
+			m.Post("/actions_token_permission", repo_setting.UpdateActionsTokenPermission)
 		})
 		m.Group("/actions", func() {
 			m.Get("", shared_actions.RedirectToDefaultSetting)

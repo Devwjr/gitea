@@ -38,15 +38,69 @@ const (
 	actionsCachePermissionWrite
 )
 
-func CreateAuthorizationToken(taskID, runID, jobID int64) (string, error) {
+type TokenPermission struct {
+	Contents     actionsCachePermission
+	Packages     actionsCachePermission
+	Actions      actionsCachePermission
+	Deployments  actionsCachePermission
+	Pages        actionsCachePermission
+	PullRequests actionsCachePermission
+	Checks       actionsCachePermission
+	Statuses     actionsCachePermission
+	Code         actionsCachePermission
+	Releases     actionsCachePermission
+	Workflows    actionsCachePermission
+}
+
+var DefaultTokenPermission = TokenPermission{
+	Contents:     actionsCachePermissionWrite,
+	Packages:     actionsCachePermissionWrite,
+	Actions:      actionsCachePermissionWrite,
+	Deployments:  actionsCachePermissionWrite,
+	Pages:        actionsCachePermissionWrite,
+	PullRequests: actionsCachePermissionWrite,
+	Checks:       actionsCachePermissionWrite,
+	Statuses:     actionsCachePermissionWrite,
+	Code:         actionsCachePermissionWrite,
+	Releases:     actionsCachePermissionWrite,
+	Workflows:    actionsCachePermissionWrite,
+}
+
+var RestrictedTokenPermission = TokenPermission{
+	Contents:     actionsCachePermissionRead,
+	Packages:     actionsCachePermissionRead,
+	Actions:      actionsCachePermissionRead,
+	Deployments:  actionsCachePermissionRead,
+	Pages:        actionsCachePermissionRead,
+	PullRequests: actionsCachePermissionRead,
+	Checks:       actionsCachePermissionRead,
+	Statuses:     actionsCachePermissionRead,
+	Code:         actionsCachePermissionRead,
+	Releases:     actionsCachePermissionRead,
+	Workflows:    actionsCachePermissionRead,
+}
+
+func CreateAuthorizationToken(taskID, runID, jobID int64, perm *TokenPermission) (string, error) {
+	if perm == nil {
+		perm = &DefaultTokenPermission
+	}
 	now := time.Now()
 
-	ac, err := json.Marshal(&[]actionsCacheScope{
-		{
-			Scope:      "",
-			Permission: actionsCachePermissionWrite,
-		},
-	})
+	scopes := []actionsCacheScope{
+		{Scope: "", Permission: perm.Contents},
+		{Scope: "packages", Permission: perm.Packages},
+		{Scope: "actions", Permission: perm.Actions},
+		{Scope: "deployments", Permission: perm.Deployments},
+		{Scope: "pages", Permission: perm.Pages},
+		{Scope: "pull-requests", Permission: perm.PullRequests},
+		{Scope: "checks", Permission: perm.Checks},
+		{Scope: "statuses", Permission: perm.Statuses},
+		{Scope: "code", Permission: perm.Code},
+		{Scope: "releases", Permission: perm.Releases},
+		{Scope: "workflows", Permission: perm.Workflows},
+	}
+
+	ac, err := json.Marshal(scopes)
 	if err != nil {
 		return "", err
 	}

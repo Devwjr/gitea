@@ -16,7 +16,7 @@ import (
 
 func TestCreateAuthorizationToken(t *testing.T) {
 	var taskID int64 = 23
-	token, err := CreateAuthorizationToken(taskID, 1, 2)
+	token, err := CreateAuthorizationToken(taskID, 1, 2, nil)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, token)
 	claims := jwt.MapClaims{}
@@ -40,9 +40,35 @@ func TestCreateAuthorizationToken(t *testing.T) {
 	assert.GreaterOrEqual(t, len(scopes), 1, "Expected at least one action cache scope for buildx gha cache")
 }
 
+func TestCreateAuthorizationTokenWithPermissions(t *testing.T) {
+	var taskID int64 = 23
+	perm := &RestrictedTokenPermission
+	token, err := CreateAuthorizationToken(taskID, 1, 2, perm)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, token)
+	claims := jwt.MapClaims{}
+	_, err = jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (any, error) {
+		return setting.GetGeneralTokenSigningSecret(), nil
+	})
+	assert.NoError(t, err)
+	acClaim, ok := claims["ac"]
+	assert.True(t, ok, "Has ac claim in jwt token")
+	ac, ok := acClaim.(string)
+	assert.True(t, ok, "ac claim is a string for buildx gha cache")
+	scopes := []actionsCacheScope{}
+	err = json.Unmarshal([]byte(ac), &scopes)
+	assert.NoError(t, err)
+	assert.GreaterOrEqual(t, len(scopes), 1, "Expected at least one action cache scope")
+	for _, scope := range scopes {
+		if scope.Scope == "" {
+			assert.Equal(t, actionsCachePermissionRead, scope.Permission, "Default scope should be read-only for restricted permission")
+		}
+	}
+}
+
 func TestParseAuthorizationToken(t *testing.T) {
 	var taskID int64 = 23
-	token, err := CreateAuthorizationToken(taskID, 1, 2)
+	token, err := CreateAuthorizationToken(taskID, 1, 2, nil)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, token)
 	headers := http.Header{}

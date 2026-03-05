@@ -180,7 +180,23 @@ type ActionsConfig struct {
 	// CollaborativeOwnerIDs is a list of owner IDs used to share actions from private repos.
 	// Only workflows from the private repos whose owners are in CollaborativeOwnerIDs can access the current repo's actions.
 	CollaborativeOwnerIDs []int64
+	// DefaultActionsTokenPermission is the default permission for Actions tokens.
+	// If not set, it defaults to permissive (full access).
+	DefaultActionsTokenPermission ActionsTokenPermissionLevel `json:"default_actions_token_permission"`
+	// MaxActionsTokenPermission is the maximum permission that can be granted to Actions tokens.
+	// It acts as a ceiling - workflow permissions are clamped to this level.
+	MaxActionsTokenPermission ActionsTokenPermissionLevel `json:"max_actions_token_permission"`
+	// AllowCrossRepositoryActionsToken enables cross-repository Actions tokens.
+	AllowCrossRepositoryActionsToken bool `json:"allow_cross_repository_actions_token"`
 }
+
+type ActionsTokenPermissionLevel string
+
+const (
+	ActionsTokenPermissionPermissive ActionsTokenPermissionLevel = "permissive"
+	ActionsTokenPermissionRestricted ActionsTokenPermissionLevel = "restricted"
+	ActionsTokenPermissionCustom     ActionsTokenPermissionLevel = "custom"
+)
 
 func (cfg *ActionsConfig) EnableWorkflow(file string) {
 	cfg.DisabledWorkflows = util.SliceRemoveAll(cfg.DisabledWorkflows, file)
@@ -214,6 +230,24 @@ func (cfg *ActionsConfig) RemoveCollaborativeOwner(ownerID int64) {
 
 func (cfg *ActionsConfig) IsCollaborativeOwner(ownerID int64) bool {
 	return slices.Contains(cfg.CollaborativeOwnerIDs, ownerID)
+}
+
+func (cfg *ActionsConfig) GetDefaultActionsTokenPermission() ActionsTokenPermissionLevel {
+	if cfg.DefaultActionsTokenPermission == "" {
+		return ActionsTokenPermissionPermissive
+	}
+	return cfg.DefaultActionsTokenPermission
+}
+
+func (cfg *ActionsConfig) GetMaxActionsTokenPermission() ActionsTokenPermissionLevel {
+	if cfg.MaxActionsTokenPermission == "" {
+		return ActionsTokenPermissionPermissive
+	}
+	return cfg.MaxActionsTokenPermission
+}
+
+func (cfg *ActionsConfig) IsActionsTokenPermissionPermissive() bool {
+	return cfg.GetDefaultActionsTokenPermission() == ActionsTokenPermissionPermissive
 }
 
 // FromDB fills up a ActionsConfig from serialized format.

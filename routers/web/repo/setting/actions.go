@@ -29,7 +29,10 @@ func ActionsGeneralSettings(ctx *context.Context) {
 		ctx.ServerError("GetUnit", err)
 		return
 	}
-	if actionsUnit == nil { // no actions unit
+	if actionsUnit == nil {
+		ctx.Data["UnitSelectedActionsTokenPermission"] = repo_model.ActionsTokenPermissionPermissive
+		ctx.Data["UnitSelectedMaxActionsTokenPermission"] = repo_model.ActionsTokenPermissionPermissive
+		ctx.Data["UnitAllowCrossRepositoryActionsToken"] = false
 		ctx.HTML(http.StatusOK, tplRepoActionsGeneralSettings)
 		return
 	}
@@ -43,6 +46,11 @@ func ActionsGeneralSettings(ctx *context.Context) {
 		}
 		ctx.Data["CollaborativeOwners"] = collaborativeOwners
 	}
+
+	actionsCfg := actionsUnit.ActionsConfig()
+	ctx.Data["UnitSelectedActionsTokenPermission"] = actionsCfg.GetDefaultActionsTokenPermission()
+	ctx.Data["UnitSelectedMaxActionsTokenPermission"] = actionsCfg.GetMaxActionsTokenPermission()
+	ctx.Data["UnitAllowCrossRepositoryActionsToken"] = actionsCfg.AllowCrossRepositoryActionsToken
 
 	ctx.HTML(http.StatusOK, tplRepoActionsGeneralSettings)
 }
@@ -118,4 +126,34 @@ func DeleteCollaborativeOwner(ctx *context.Context) {
 	}
 
 	ctx.JSONOK()
+}
+
+func UpdateActionsTokenPermission(ctx *context.Context) {
+	actionsUnit, err := ctx.Repo.Repository.GetUnit(ctx, unit_model.TypeActions)
+	if err != nil {
+		ctx.ServerError("GetUnit", err)
+		return
+	}
+
+	actionsCfg := actionsUnit.ActionsConfig()
+
+	defaultPerm := ctx.FormString("default_actions_token_permission")
+	if defaultPerm != "" {
+		actionsCfg.DefaultActionsTokenPermission = repo_model.ActionsTokenPermissionLevel(defaultPerm)
+	}
+
+	maxPerm := ctx.FormString("max_actions_token_permission")
+	if maxPerm != "" {
+		actionsCfg.MaxActionsTokenPermission = repo_model.ActionsTokenPermissionLevel(maxPerm)
+	}
+
+	actionsCfg.AllowCrossRepositoryActionsToken = ctx.FormBool("allow_cross_repository_actions_token")
+
+	if err := repo_model.UpdateRepoUnit(ctx, actionsUnit); err != nil {
+		ctx.ServerError("UpdateRepoUnit", err)
+		return
+	}
+
+	ctx.Flash.Success(ctx.Tr("repo.settings.update_settings_success"))
+	ctx.Redirect(ctx.Repo.RepoLink + "/settings/actions/general")
 }

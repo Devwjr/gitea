@@ -22,6 +22,103 @@
 		</form>
 	</div>
 
+{{if and .EnableActions (.Permission.CanRead ctx ctx.Consts.RepoUnitTypeActions)}}
+	<h4 class="ui top attached header">
+		{{ctx.Locale.Tr "actions.general.token_permissions"}}
+	</h4>
+	<div class="ui attached segment">
+		<form class="ui form" action="{{.Link}}/actions_token_permission" method="post">
+			<div class="field">
+				<label>{{ctx.Locale.Tr "actions.general.default_token_permission"}}</label>
+				<div class="ui selection dropdown">
+					<input type="hidden" name="default_actions_token_permission" value="{{.Repository.UnitSelectedActionsTokenPermission}}">
+					<i class="dropdown icon"></i>
+					<div class="default text">{{ctx.Locale.Tr "actions.general.permissive"}}</div>
+					<div class="menu">
+						<div class="item" data-value="permissive">{{ctx.Locale.Tr "actions.general.permissive"}}</div>
+						<div class="item" data-value="restricted">{{ctx.Locale.Tr "actions.general.restricted"}}</div>
+					</div>
+				</div>
+				<p class="help">{{ctx.Locale.Tr "actions.general.default_token_permission_help"}}</p>
+			</div>
+			<div class="field">
+				<label>{{ctx.Locale.Tr "actions.general.max_token_permission"}}</label>
+				<div class="ui selection dropdown">
+					<input type="hidden" name="max_actions_token_permission" value="{{.Repository.UnitSelectedMaxActionsTokenPermission}}">
+					<i class="dropdown icon"></i>
+					<div class="default text">{{ctx.Locale.Tr "actions.general.permissive"}}</div>
+					<div class="menu">
+						<div class="item" data-value="permissive">{{ctx.Locale.Tr "actions.general.permissive"}}</div>
+						<div class="item" data-value="restricted">{{ctx.Locale.Tr "actions.general.restricted"}}</div>
+					</div>
+				</div>
+				<p class="help">{{ctx.Locale.Tr "actions.general.max_token_permission_help"}}</p>
+			</div>
+			<div class="field">
+				<div class="ui checkbox">
+					<input name="allow_cross_repository_actions_token" type="checkbox" {{if .Repository.UnitAllowCrossRepositoryActionsToken}}checked{{end}}>
+					<label>{{ctx.Locale.Tr "actions.general.allow_cross_repository"}}</label>
+				</div>
+				<p class="help">{{ctx.Locale.Tr "actions.general.allow_cross_repository_help"}}</p>
+			</div>
+			<div class="field">
+				<button class="ui primary button">{{ctx.Locale.Tr "repo.settings.update_settings"}}</button>
+			</div>
+		</form>
+	</div>
+
+	{{if .Repository.IsPrivate}}
+	<h4 class="ui top attached header">
+		{{ctx.Locale.Tr "actions.general.collaborative_owners_management"}}
+	</h4>
+	{{if len .CollaborativeOwners}}
+	<div class="ui attached segment">
+		<div class="flex-list">
+			{{range .CollaborativeOwners}}
+			<div class="flex-item tw-items-center">
+				<div class="flex-item-leading">
+					<a href="{{.HomeLink}}">{{ctx.AvatarUtils.Avatar . 32}}</a>
+				</div>
+				<div class="flex-item-main">
+					<div class="flex-item-title">
+						{{template "shared/user/name" .}}
+					</div>
+				</div>
+				<div class="flex-item-trailing">
+					<button class="ui red tiny button inline link-action"
+						data-url="{{$.Link}}/collaborative_owner/delete?id={{.ID}}"
+						data-modal-confirm-header="{{ctx.Locale.Tr "actions.general.remove_collaborative_owner"}}"
+						data-modal-confirm-content="{{ctx.Locale.Tr "actions.general.remove_collaborative_owner_desc"}}"
+					>{{ctx.Locale.Tr "remove"}}</button>
+				</div>
+			</div>
+			{{end}}
+		</div>
+	</div>
+	{{end}}
+	<div class="ui bottom attached segment">
+		<form class="ui form form-fetch-action" action="{{.Link}}/collaborative_owner/add" method="post">
+			<div id="search-user-box" class="ui search input tw-align-middle" data-include-orgs="true">
+				<input class="prompt" name="collaborative_owner" placeholder="{{ctx.Locale.Tr "search.user_kind"}}" autocomplete="off" autofocus required>
+			</div>
+			<button class="ui primary button">{{ctx.Locale.Tr "actions.general.add_collaborative_owner"}}</button>
+		</form>
+		<br>
+		{{ctx.Locale.Tr "actions.general.collaborative_owners_management_help"}}
+	</div>
+	{{end}}
+{{end}}
+</div>
+			</div>
+			{{if not $isActionsGlobalDisabled}}
+			<div class="divider"></div>
+				<div class="field">
+				<button class="ui primary button">{{ctx.Locale.Tr "repo.settings.update_settings"}}</button>
+			</div>
+			{{end}}
+		</form>
+	</div>
+
 {{if and .EnableActions (.Permission.CanRead ctx.Consts.RepoUnitTypeActions)}}
 	{{if .Repository.IsPrivate}}
 	<h4 class="ui top attached header">
