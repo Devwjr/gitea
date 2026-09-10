@@ -5,16 +5,17 @@
 package auth
 
 import (
+	"errors"
 	"net/http"
 
-	actions_model "code.gitea.io/gitea/models/actions"
-	auth_model "code.gitea.io/gitea/models/auth"
-	user_model "code.gitea.io/gitea/models/user"
-	"code.gitea.io/gitea/modules/auth/httpauth"
-	"code.gitea.io/gitea/modules/log"
-	"code.gitea.io/gitea/modules/setting"
-	"code.gitea.io/gitea/modules/timeutil"
-	"code.gitea.io/gitea/modules/util"
+	actions_model "gitea.dev/models/actions"
+	auth_model "gitea.dev/models/auth"
+	user_model "gitea.dev/models/user"
+	"gitea.dev/modules/auth/httpauth"
+	"gitea.dev/modules/log"
+	"gitea.dev/modules/setting"
+	"gitea.dev/modules/timeutil"
+	"gitea.dev/modules/util"
 )
 
 // Ensure the struct implements the interface.
@@ -28,6 +29,7 @@ const (
 	AccessTokenMethodName = "access_token"
 	OAuth2TokenMethodName = "oauth2_token"
 	ActionTokenMethodName = "action_token"
+	DeployTokenMethodName = "deploy_token"
 )
 
 // Basic implements the Auth interface and authenticates requests (API requests
@@ -40,14 +42,7 @@ func (b *Basic) Name() string {
 	return BasicMethodName
 }
 
-func (b *Basic) parseAuthBasic(req *http.Request) (ret struct{ authToken, uname, passwd string }) {
-	// Basic authentication should only fire on API, Feed, Download, Archives or on Git or LFSPaths
-	// Not all feed (rss/atom) clients feature the ability to add cookies or headers, so we need to allow basic auth for feeds
-	detector := newAuthPathDetector(req)
-	if !detector.isAPIPath() && !detector.isFeedRequest(req) && !detector.isContainerPath() && !detector.isAttachmentDownload() && !detector.isArchivePath() && !detector.isGitRawOrAttachOrLFSPath() {
-		return ret
-	}
-
+func parseAuthBasic(req *http.Request) (ret struct{ authToken, uname, passwd string }) {
 	authHeader := req.Header.Get("Authorization")
 	if authHeader == "" {
 		return ret
@@ -59,7 +54,7 @@ func (b *Basic) parseAuthBasic(req *http.Request) (ret struct{ authToken, uname,
 	uname, passwd := parsed.BasicAuth.Username, parsed.BasicAuth.Password
 
 	// Check if username or password is a token
-	isUsernameToken := len(passwd) == 0 || passwd == "x-oauth-basic"
+	isUsernameToken := passwd == "" || passwd == "x-oauth-basic"
 	// Assume username is token
 	authToken := uname
 	if !isUsernameToken {
@@ -76,7 +71,7 @@ func (b *Basic) parseAuthBasic(req *http.Request) (ret struct{ authToken, uname,
 // VerifyAuthToken only the access token provided as parameter, used by other auth methods that want to reuse access token verification logic
 func (b *Basic) VerifyAuthToken(req *http.Request, w http.ResponseWriter, store DataStore, sess SessionStore, authToken string) (*user_model.User, error) {
 	// get oauth2 token's user's ID
-	_, uid := GetOAuthAccessTokenScopeAndUserID(req.Context(), authToken)
+	accessTokenScope, uid := GetOAuthAccessTokenScopeAndUserID(req.Context(), authToken)
 	if uid != 0 {
 		log.Trace("Basic Authorization: Valid OAuthAccessToken for user[%d]", uid)
 
@@ -87,7 +82,7 @@ func (b *Basic) VerifyAuthToken(req *http.Request, w http.ResponseWriter, store 
 		}
 
 		store.GetData()["LoginMethod"] = OAuth2TokenMethodName
-		store.GetData()["IsApiToken"] = true
+		store.GetData()["ApiTokenScope"] = accessTokenScope
 		return u, nil
 	}
 
@@ -107,11 +102,10 @@ func (b *Basic) VerifyAuthToken(req *http.Request, w http.ResponseWriter, store 
 		}
 
 		store.GetData()["LoginMethod"] = AccessTokenMethodName
-		store.GetData()["IsApiToken"] = true
 		store.GetData()["ApiTokenScope"] = token.Scope
 		return u, nil
-	} else if !auth_model.IsErrAccessTokenNotExist(err) && !auth_model.IsErrAccessTokenEmpty(err) {
-		log.Error("GetAccessTokenBySha: %v", err)
+	} else if !errors.Is(err, util.ErrNotExist) {
+		log.Error("GetAccessTokenBySHA: %v", err)
 	}
 
 	// check task token
@@ -129,7 +123,7 @@ func (b *Basic) VerifyAuthToken(req *http.Request, w http.ResponseWriter, store 
 // name/token on successful validation.
 // Returns nil if header is empty or validation fails.
 func (b *Basic) Verify(req *http.Request, w http.ResponseWriter, store DataStore, sess SessionStore) (*user_model.User, error) {
-	parseBasicRet := b.parseAuthBasic(req)
+	parseBasicRet := parseAuthBasic(req)
 	authToken, uname, passwd := parseBasicRet.authToken, parseBasicRet.uname, parseBasicRet.passwd
 	if authToken == "" && uname == "" {
 		return nil, nil //nolint:nilnil // the auth method is not applicable
@@ -182,7 +176,8 @@ func validateTOTP(req *http.Request, u *user_model.User) error {
 		}
 		return err
 	}
-	if ok, err := twofa.ValidateTOTP(req.Header.Get("X-Gitea-OTP")); err != nil {
+	// Consume the passcode atomically so a captured OTP cannot be replayed within its validity window.
+	if ok, err := twofa.ValidateAndConsumeTOTP(req.Context(), req.Header.Get("X-Gitea-OTP")); err != nil {
 		return err
 	} else if !ok {
 		return util.NewInvalidArgumentErrorf("invalid provided OTP")
@@ -191,8 +186,8 @@ func validateTOTP(req *http.Request, u *user_model.User) error {
 }
 
 func GetAccessScope(store DataStore) auth_model.AccessTokenScope {
-	if v, ok := store.GetData()["ApiTokenScope"]; ok {
-		return v.(auth_model.AccessTokenScope)
+	if scope, hasApiTokenScope := store.GetData()["ApiTokenScope"].(auth_model.AccessTokenScope); hasApiTokenScope {
+		return scope
 	}
 	switch store.GetData()["LoginMethod"] {
 	case OAuth2TokenMethodName:

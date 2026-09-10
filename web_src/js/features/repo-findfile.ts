@@ -34,7 +34,7 @@ export function strSubMatch(full: string, subLower: string) {
   return res;
 }
 
-export function calcMatchedWeight(matchResult: Array<any>) {
+export function calcMatchedWeight(matchResult: string[]) {
   let weight = 0;
   for (let i = 0; i < matchResult.length; i++) {
     if (i % 2 === 1) { // matches are on odd indices, see strSubMatch
@@ -69,7 +69,7 @@ export function filterRepoFilesWeighted(files: Array<string>, filter: string) {
 
 export function initRepoFileSearch() {
   registerGlobalInitFunc('initRepoFileSearch', async (el) => {
-    const {default: RepoFileSearch} = await import(/* webpackChunkName: "RepoFileSearch" */ '../components/RepoFileSearch.vue');
+    const {default: RepoFileSearch} = await import('../components/RepoFileSearch.vue');
     createApp(RepoFileSearch, {
       repoLink: el.getAttribute('data-repo-link'),
       currentRefNameSubURL: el.getAttribute('data-current-ref-name-sub-url'),
